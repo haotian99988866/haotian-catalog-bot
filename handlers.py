@@ -1,6 +1,9 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-from database import init_db, add_episode, update_message_id_if_exists, get_all_works, get_episodes_of_work, search_works_by_keyword
+from database import (
+    init_db, add_episode, update_message_id_if_exists,
+    get_all_works, get_episodes_of_work, search_works_by_keyword
+)
 from parsers import parse_message_text
 from config import Config
 
@@ -26,7 +29,11 @@ def works_list_kb(works, page=1, per_page=8):
     page_works = works[start:start + per_page]
     kb = []
     for w in page_works:
-        kb.append([InlineKeyboardButton(f"📺 {w['work_name']} ({w['total_episodes']}集)", callback_data=f"show_eps:{w['work_name']}")])
+        t = w["main_type"]
+        kb.append([InlineKeyboardButton(
+            f"📺 {w['work_name']} ({w['total_episodes']}{t} / 已上传{w['actual_uploaded']})",
+            callback_data=f"show_eps:{w['work_name']}"
+        )])
     nav = []
     if page > 1: nav.append(InlineKeyboardButton("⬅️ 上一页", callback_data=f"list_page:{page-1}"))
     if page < total_pages: nav.append(InlineKeyboardButton("下一页 ➡️", callback_data=f"list_page:{page+1}"))
@@ -34,9 +41,18 @@ def works_list_kb(works, page=1, per_page=8):
     return InlineKeyboardMarkup(kb) if kb else None
 
 def episodes_kb(wdata, from_page=1):
-    import re
-    eps = sorted(wdata["episodes"], key=lambda e: int(n[0]) if (n := re.findall(r"\d+", e["episode"])) else 99999)
-    kb = [InlineKeyboardButton(f"▶ {e['episode']}", url=build_jump_url(e["message_id"])) for e in eps]
+    kb = []
+    for e in wdata["episodes"]:
+        if e["has_link"]:
+            kb.append([InlineKeyboardButton(
+                f"▶ {e['episode']}",
+                url=build_jump_url(e["message_id"])
+            )])
+        else:
+            kb.append([InlineKeyboardButton(
+                f"⬜ {e['episode']}（暂未上传）",
+                callback_data="noop"
+            )])
     kb.append([InlineKeyboardButton("⬅️ 返回作品列表", callback_data=f"back_to_list:{from_page}")])
     return InlineKeyboardMarkup(kb)
 
@@ -48,8 +64,8 @@ async def menu(u: Update, c: ContextTypes.DEFAULT_TYPE):
 
 欢迎使用👇
 
-• 🎬 全部影片 — 按作品浏览，显示总集数
-• 🔎 搜索 — 查找作品，展开选择集数
+• 🎬 全部影片 — 按作品浏览，显示总集/期数
+• 🔎 搜索 — 查找作品
 • 🏷️ 按标签 — 按分类筛选
 • ❓ 帮助 — 使用说明
 
@@ -62,9 +78,13 @@ async def start(u: Update, c: ContextTypes.DEFAULT_TYPE):
 async def list_shows(u: Update, c: ContextTypes.DEFAULT_TYPE):
     works = get_all_works()
     if not works:
-        await send_menu_kb(u, "📭 暂无收录，频道发消息开始收录吧！\n格式：《片名》第X集 #标签")
+        await send_menu_kb(u, "📭 暂无收录，频道发消息开始收录吧！\n格式：《片名》第X集 #标签\n综艺用：《综艺名》第X期 #标签")
         return
-    await u.message.reply_text(f"📋 <b>全部收录（共 {len(works)} 部作品）</b>\n点作品展开集数👇", reply_markup=works_list_kb(works), parse_mode="HTML")
+    await u.message.reply_text(
+        "📋 <b>全部收录</b>\n点作品展开列表👇\n⬜=暂未上传  ▶=可播放",
+        reply_markup=works_list_kb(works),
+        parse_mode="HTML"
+    )
 
 async def search_cmd(u: Update, c: ContextTypes.DEFAULT_TYPE):
     await send_menu_kb(u, "🔎 请直接发片名关键词给我！")
@@ -75,7 +95,11 @@ async def search_work(u: Update, c: ContextTypes.DEFAULT_TYPE, kw=None):
     if not works:
         await send_menu_kb(u, f"🔎 搜索：<b>{kw}</b>\n\n没有找到相关作品")
         return
-    await u.message.reply_text(f"🔎 搜索：<b>{kw}</b>（找到 {len(works)} 部）\n点作品展开集数👇", reply_markup=works_list_kb(works), parse_mode="HTML")
+    await u.message.reply_text(
+        f"🔎 搜索：<b>{kw}</b>（找到 {len(works)} 部）\n点作品展开列表👇",
+        reply_markup=works_list_kb(works),
+        parse_mode="HTML"
+    )
 
 async def tags_cmd(u: Update, c: ContextTypes.DEFAULT_TYPE):
     await send_menu_kb(u, "🏷️ 标签功能开发中，敬请期待！")
@@ -84,7 +108,12 @@ async def help_cmd(u: Update, c: ContextTypes.DEFAULT_TYPE):
     await send_menu_kb(u, f"""📖 <b>使用帮助</b>
 
 <b>收录格式：</b>
-《作品名》第X集 #标签1 #标签2
+电视剧/动漫：《片名》第5集 #标签
+综艺：《综艺名》第3期 #综艺
+
+<b>显示说明：</b>
+▶ 第X集/期 = 已上传，可直接跳转
+⬜ 第X集/期（暂未上传）= 占位，待补
 
 <b>频道链接：</b>
 {Config.CHANNEL_LINK}""")
@@ -114,14 +143,30 @@ async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
     try: await q.answer()
     except: return
     d = q.data
+    if d == "noop":
+        await q.answer("该集/期暂未上传", show_alert=True)
+        return
     if d.startswith("show_eps:"):
         wn = d.split(":", 1)[1]
         w = get_episodes_of_work(wn)
         if not w: await q.answer("该作品不存在", show_alert=True); return
-        await q.edit_message_text(f"📺 <b>{wn}</b> — 共 {w['total_episodes']} 集\n点集数直接跳转👇", reply_markup=episodes_kb(w), parse_mode="HTML")
+        t = w["main_type"]
+        await q.edit_message_text(
+            f"📺 <b>{wn}</b> — 共 {w['total_episodes']}{t} / 已上传 {w['actual_uploaded']}{t}\n▶=可播放  ⬜=暂未上传",
+            reply_markup=episodes_kb(w),
+            parse_mode="HTML"
+        )
     elif d.startswith("list_page:"):
         page = int(d.split(":")[1])
-        await q.edit_message_text("📋 <b>全部收录</b>\n点作品展开集数👇", reply_markup=works_list_kb(get_all_works(), page), parse_mode="HTML")
+        await q.edit_message_text(
+            "📋 <b>全部收录</b>\n点作品展开列表👇",
+            reply_markup=works_list_kb(get_all_works(), page),
+            parse_mode="HTML"
+        )
     elif d.startswith("back_to_list:"):
         page = int(d.split(":")[1])
-        await q.edit_message_text("📋 <b>全部收录</b>\n点作品展开集数👇", reply_markup=works_list_kb(get_all_works(), page), parse_mode="HTML")
+        await q.edit_message_text(
+            "📋 <b>全部收录</b>\n点作品展开列表👇",
+            reply_markup=works_list_kb(get_all_works(), page),
+            parse_mode="HTML"
+        )
