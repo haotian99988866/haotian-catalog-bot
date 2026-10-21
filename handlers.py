@@ -10,12 +10,12 @@ logger = logging.getLogger(__name__)
 def main_kb():
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📂 全部影片", callback_data="all_movies"),
-            InlineKeyboardButton("🔍 搜索", callback_data="search")
+            InlineKeyboardButton("全部影片", callback_data="all_movies"),
+            InlineKeyboardButton("搜索", callback_data="search")
         ],
         [
-            InlineKeyboardButton("🏷️ 按标签", callback_data="by_tag"),
-            InlineKeyboardButton("❓ 帮助", callback_data="help")
+            InlineKeyboardButton("按标签", callback_data="by_tag"),
+            InlineKeyboardButton("帮助", callback_data="help")
         ]
     ])
 
@@ -25,15 +25,19 @@ def episodes_kb(work):
     buttons = []
     row = []
     for ep in range(1, total + 1):
-        text = f"{ep}" if ep in uploaded else f"{ep} ░"
-        cb_data = f"play:{work.get('work_name', '')}:{ep}" if ep in uploaded else "noop"
+        if ep in uploaded:
+            text = f"{ep}"
+            cb_data = f"play:{work.get('work_name', '')}:{ep}"
+        else:
+            text = f"{ep}(未上传)"
+            cb_data = "noop"
         row.append(InlineKeyboardButton(text, callback_data=cb_data))
         if len(row) >= 5:
             buttons.append(row)
             row = []
     if row:
         buttons.append(row)
-    buttons.append([InlineKeyboardButton("◀ 返回", callback_data="list_page:1")])
+    buttons.append([InlineKeyboardButton("返回", callback_data="list_page:1")])
     return InlineKeyboardMarkup(buttons)
 
 def works_list_kb(works, page=1):
@@ -50,8 +54,8 @@ def works_list_kb(works, page=1):
 # ========== 底部主键盘 ==========
 main_reply_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton("🎬 全部影片"), KeyboardButton("🔎 搜索")],
-        [KeyboardButton("🏷️ 按标签"), KeyboardButton("❓ 帮助")]
+        [KeyboardButton("全部影片"), KeyboardButton("搜索")],
+        [KeyboardButton("按标签"), KeyboardButton("帮助")]
     ],
     resize_keyboard=True,
     one_time_keyboard=False,
@@ -68,12 +72,6 @@ def chinese_to_num(s):
         return int(s)
     if s in chinese_num_map:
         return chinese_num_map[s]
-    for cn, val in chinese_num_map.items():
-        if s.endswith(cn) and len(s) > len(cn):
-            try:
-                return int(s[:-len(cn)]) + val
-            except:
-                pass
     return None
 
 # ========== 消息处理函数 ==========
@@ -82,10 +80,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 欢迎使用👇
 
-• 🎬 全部影片 — 按作品浏览
-• 🔎 搜索 — 查找作品
-• 🏷️ 按标签 — 按分类筛选
-• ❓ 帮助 — 使用说明
+• 全部影片 — 按作品浏览
+• 搜索 — 查找作品
+• 按标签 — 按分类筛选
+• 帮助 — 使用说明
 
 直接发片名也能搜索哦！"""
     await update.message.reply_text(text, reply_markup=main_reply_kb, parse_mode="HTML")
@@ -95,47 +93,44 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     t = update.message.text.strip()
-    if t == "🎬 全部影片":
+    if t == "全部影片":
         works = get_all_works()
         if not works:
-            await update.message.reply_text("📭 暂无收录，频道发消息开始收录吧！\n格式：《片名》第X集 #标签")
+            await update.message.reply_text("暂无收录，频道发消息开始收录吧！\n格式：《片名》第X集 #标签")
             return
         await update.message.reply_text(
             f"📋 <b>全部收录（共 {len(works)} 部作品）</b>\n点作品展开集数👇",
             reply_markup=works_list_kb(works),
             parse_mode="HTML"
         )
-    elif t == "🔎 搜索":
-        await update.message.reply_text("🔍 请直接发片名关键词给我！")
-    elif t == "🏷️ 按标签":
-        await update.message.reply_text("🏷️ 标签功能开发中，敬请期待！")
-    elif t == "❓ 帮助":
+    elif t == "搜索":
+        await update.message.reply_text("请直接发片名关键词给我！")
+    elif t == "按标签":
+        await update.message.reply_text("标签功能开发中，敬请期待！")
+    elif t == "帮助":
         text = """📖 <b>使用帮助</b>
 
 <b>收录格式：</b>
 《作品名》第X集 #标签1 #标签2
 支持写法：《片名》第4集 / 《片名》第四集 / 《片名》第四集04
-综艺：《综艺名》第X期 #综艺
 
-<b>说明：</b>
-▶ 已上传可播放
-░ 暂未上传
+<b>播放：</b>
+点击蓝色数字集数即可播放
 """
         await update.message.reply_text(text, parse_mode="HTML")
     else:
         works = get_all_works()
         filtered = [w for w in works if t in w.get("work_name", "")]
         if not filtered:
-            await update.message.reply_text(f"🔎 搜索：<b>{t}</b>\n没有找到相关作品", parse_mode="HTML")
+            await update.message.reply_text(f"搜索：<b>{t}</b>\n没有找到相关作品", parse_mode="HTML")
             return
         await update.message.reply_text(
-            f"🔎 搜索：<b>{t}</b>（找到 {len(filtered)} 部）\n点作品展开集数👇",
+            f"搜索：<b>{t}</b>（找到 {len(filtered)} 部）\n点作品展开集数👇",
             reply_markup=works_list_kb(filtered),
             parse_mode="HTML"
         )
 
 async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """监听频道消息 — 支持汉字数字+后缀编号"""
     text = ""
     if update.channel_post:
         text = update.channel_post.text or update.channel_post.caption or ""
@@ -144,18 +139,18 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text:
         return
 
-    logger.info(f"📥 收到频道消息: {text}")
+    logger.info(f"收到频道消息: {text}")
 
     # 匹配：《片名》第[汉字/数字][集/期][数字后缀]
     match = re.search(r"《\s*(.+?)\s*》\s*第\s*([一二三四五六七八九十\d]+)\s*(?:集|期)\s*(\d+)?", text)
     
     if not match:
-        logger.info("⚠️  未匹配到收录格式")
+        logger.info("未匹配到收录格式")
         return
 
     name = match.group(1).strip()
     num_part = match.group(2).strip()
-    suffix_num = match.group(3)  # 捕获"第四集04"里的04
+    suffix_num = match.group(3)
 
     # 优先用后缀数字，否则转换汉字数字
     if suffix_num:
@@ -163,10 +158,10 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         episode = chinese_to_num(num_part)
         if not episode:
-            logger.info(f"⚠️  集数解析失败: {num_part}")
+            logger.info(f"集数解析失败: {num_part}")
             return
 
-    # 更新数据库
+    # 更新数据库 — 确保已上传列表正确追加
     existing = get_episodes_of_work(name)
     if existing:
         uploaded = existing["uploaded_list"] + [episode]
@@ -175,12 +170,12 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uploaded = [episode]
         total = episode
     
-    uploaded = sorted(set(uploaded))
+    uploaded = sorted(set(uploaded))  # 去重+排序
     add_or_update_work(name, total, uploaded)
     
-    reply_text = f"✅ 已收录：《{name}》第{episode}集\n📊 已收录 {len(uploaded)} 集"
+    reply_text = f"✅ 已收录：《{name}》第{episode}集\n已收录 {len(uploaded)} 集"
     await update.effective_chat.send_message(reply_text)
-    logger.info(f"✅ 收录成功: 《{name}》第{episode}集")
+    logger.info(f"收录成功: 《{name}》第{episode}集")
 
 # ========== 按钮回调处理 ==========
 async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
@@ -193,7 +188,15 @@ async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
     d = q.data
 
     if d == "noop":
-        await q.answer("该集/期暂未上传", show_alert=True)
+        await q.answer("该集暂未上传", show_alert=True)
+        return
+
+    if d.startswith("play:"):
+        _, work_name, ep_str = d.split(":", 2)
+        ep = int(ep_str)
+        # 播放功能 — 这里填入你的实际视频消息/链接
+        await q.answer(f"正在播放：{work_name} 第{ep}集", show_alert=True)
+        # 如果有存储的文件ID/链接，在这里发送
         return
 
     if d.startswith("show_eps:"):
@@ -203,65 +206,37 @@ async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
             await q.answer("该作品不存在", show_alert=True)
             return
         await q.edit_message_text(
-            f"📺 <b>{w.get('work_name', wn)}</b> — 共 {w.get('total_episodes', 0)} 集 / 已上传 {w.get('actual_uploaded', 0)} 集\n\n▶=可播放  ░=暂未上传",
+            f"📺 <b>{w.get('work_name', wn)}</b> — 共 {w.get('total_episodes', 0)} 集 / 已上传 {w.get('actual_uploaded', 0)} 集\n\n点击数字播放",
             reply_markup=episodes_kb(w),
             parse_mode="HTML"
         )
 
     elif d.startswith("list_page:"):
-        page = int(d.split(":", 1)[1])
         works = get_all_works()
         await q.edit_message_text(
             f"📋 <b>全部收录</b>\n共 {len(works)} 部作品",
-            reply_markup=works_list_kb(works, page),
-            parse_mode="HTML"
-        )
-
-    elif d.startswith("back_to_list:"):
-        page = int(d.split(":", 1)[1])
-        works = get_all_works()
-        await q.edit_message_text(
-            f"📋 <b>全部收录</b>\n共 {len(works)} 部作品",
-            reply_markup=works_list_kb(works, page),
+            reply_markup=works_list_kb(works),
             parse_mode="HTML"
         )
 
     elif d == "all_movies":
         works = get_all_works()
         if not works:
-            text = "📂 <b>全部影片</b>\n暂无收录，频道发消息开始收录吧！\n格式：《片名》第X集 #标签"
+            text = "暂无收录，频道发消息开始收录吧！"
         else:
-            text = f"📂 <b>全部影片</b>\n共 {len(works)} 部作品"
-        await q.edit_message_text(
-            text,
-            reply_markup=works_list_kb(works, 1),
-            parse_mode="HTML"
-        )
+            text = f"全部影片 — 共 {len(works)} 部作品"
+        await q.edit_message_text(text, reply_markup=works_list_kb(works, 1), parse_mode="HTML")
 
     elif d == "search":
-        await q.edit_message_text(
-            "🔍 请输入片名搜索：",
-            reply_markup=main_kb(),
-            parse_mode="HTML"
-        )
+        await q.edit_message_text("请输入片名搜索：", reply_markup=main_kb(), parse_mode="HTML")
 
     elif d == "by_tag":
-        await q.edit_message_text(
-            "🏷️ 请选择标签：",
-            reply_markup=main_kb(),
-            parse_mode="HTML"
-        )
+        await q.edit_message_text("请选择标签：", reply_markup=main_kb(), parse_mode="HTML")
 
     elif d == "help":
-        help_text = """📖 使用说明：
-支持格式：
-《片名》第4集
-《片名》第四集
-《片名》第四集04
-《片名》第4集 #标签
+        help_text = """使用说明：
+格式：《片名》第X集
+支持：《片名》第四集 / 《片名》第四集04
+点击数字集数即可播放
 """
-        await q.edit_message_text(
-            help_text,
-            reply_markup=main_kb(),
-            parse_mode="HTML"
-        )
+        await q.edit_message_text(help_text, reply_markup=main_kb(), parse_mode="HTML")
