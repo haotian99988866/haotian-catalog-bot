@@ -6,11 +6,9 @@ DB_FILE = "catalog.db"
 
 
 def init_db():
-    """初始化数据库"""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
-    # 影片表
     c.execute('''
         CREATE TABLE IF NOT EXISTS shows (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,7 +24,6 @@ def init_db():
 
 
 def add_show(title: str, tags: List[str] = None, message_id: int = None):
-    """添加影片，已存在返回 False"""
     tags_str = " ".join(tags or [])
     try:
         conn = sqlite3.connect(DB_FILE)
@@ -44,7 +41,6 @@ def add_show(title: str, tags: List[str] = None, message_id: int = None):
 
 
 def show_exists(title: str) -> bool:
-    """检查影片是否已收录"""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT 1 FROM shows WHERE title = ?", (title,))
@@ -53,11 +49,22 @@ def show_exists(title: str) -> bool:
     return exists
 
 
-def get_all_shows() -> List[Dict]:
-    """获取全部影片，按时间倒序"""
+# ✅ 新增：更新影片的 message_id，补全旧链接
+def update_message_id(title: str, message_id: int):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT id, title, tags, created_at FROM shows ORDER BY created_at DESC")
+    c.execute(
+        "UPDATE shows SET message_id = ? WHERE title = ?",
+        (message_id, title)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_all_shows() -> List[Dict]:
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT id, title, tags, message_id, created_at FROM shows ORDER BY created_at DESC")
     rows = c.fetchall()
     conn.close()
     
@@ -66,19 +73,19 @@ def get_all_shows() -> List[Dict]:
             "id": row[0],
             "title": row[1],
             "tags": row[2].split() if row[2] else [],
-            "created_at": row[3]
+            "message_id": row[3],
+            "created_at": row[4]
         }
         for row in rows
     ]
 
 
 def search_shows(keyword: str) -> List[Dict]:
-    """按关键词搜索片名"""
     keyword = f"%{keyword}%"
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute(
-        "SELECT id, title, tags, created_at FROM shows WHERE title LIKE ? ORDER BY created_at DESC",
+        "SELECT id, title, tags, message_id, created_at FROM shows WHERE title LIKE ? ORDER BY created_at DESC",
         (keyword,)
     )
     rows = c.fetchall()
@@ -89,26 +96,27 @@ def search_shows(keyword: str) -> List[Dict]:
             "id": row[0],
             "title": row[1],
             "tags": row[2].split() if row[2] else [],
-            "created_at": row[3]
+            "message_id": row[3],
+            "created_at": row[4]
         }
         for row in rows
     ]
 
 
 def get_shows_by_tags(tag: str) -> List[Dict]:
-    """按标签筛选"""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT id, title, tags, created_at FROM shows ORDER BY created_at DESC")
+    c.execute("SELECT id, title, tags, message_id, created_at FROM shows ORDER BY created_at DESC")
     rows = c.fetchall()
     conn.close()
-
+    
     return [
         {
             "id": row[0],
             "title": row[1],
             "tags": row[2].split() if row[2] else [],
-            "created_at": row[3]
+            "message_id": row[3],
+            "created_at": row[4]
         }
         for row in rows
         if tag in (row[2] or "").split()
