@@ -6,6 +6,7 @@ load_dotenv()
 class Config:
     BOT_TOKEN = os.getenv("BOT_TOKEN", "")
     CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1003920194464"))
+    CHANNEL_ID_EXPECTED = "-1003920194464"  # ← 补上这行！
     CHANNEL_LINK = os.getenv("CHANNEL_LINK", "https://t.me/haotianyingyuan")
     
     @classmethod
