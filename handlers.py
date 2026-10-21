@@ -30,16 +30,14 @@ main_keyboard = ReplyKeyboardMarkup(
 )
 
 
-# ✅ 修复：手机端兼容的跳转链接
+# ✅ 最简链接格式 — 全平台兼容
 def build_jump_url(message_id: int) -> str:
-    # 格式：https://t.me/c/频道ID/消息ID （全平台兼容）
-    base = Config.CHANNEL_LINK
-    if base.endswith("/"):
-        return f"{base}{message_id}"
+    """生成直接跳转链接，手机/电脑都正常打开"""
+    base = Config.CHANNEL_LINK.rstrip("/")
     return f"{base}/{message_id}"
 
 
-# 影片列表
+# 影片列表 — 集数已合并到标题
 def shows_keyboard(shows, page=1, per_page=10):
     total = len(shows)
     total_pages = (total + per_page - 1) // per_page
@@ -52,11 +50,11 @@ def shows_keyboard(shows, page=1, per_page=10):
         if show.get("message_id"):
             jump_url = build_jump_url(show["message_id"])
             keyboard.append([
-                InlineKeyboardButton(f"▶ {idx}. {show['title']}", url=jump_url)
+                InlineKeyboardButton(f"▶ {show['title']}", url=jump_url)
             ])
         else:
             keyboard.append([
-                InlineKeyboardButton(f"📂 {idx}. {show['title']}", callback_data="no_link")
+                InlineKeyboardButton(f"📂 {show['title']}", callback_data="no_link")
             ])
 
     nav_row = []
@@ -70,7 +68,6 @@ def shows_keyboard(shows, page=1, per_page=10):
     return InlineKeyboardMarkup(keyboard) if keyboard else None
 
 
-# ✅ 每次交互都重发键盘，清除聊天后自动恢复
 async def send_menu_with_kb(update: Update, text: str):
     await update.message.reply_text(
         text,
@@ -101,10 +98,10 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """📖 <b>使用帮助</b>
 
 <b>收录格式：</b>
-《片名》日期 #标签1 #标签2
+《片名》第X集 日期 #标签
 
 <b>链接说明：</b>
-• 片名直接点 → 全平台（手机/电脑）直接跳转
+• 片名直接点 → 手机/电脑都能直接打开播放
 • 暂无链接 → 频道重发该内容自动补全
 
 <b>频道链接：</b>
@@ -147,7 +144,6 @@ async def tags_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_menu_with_kb(update, text)
 
 
-# 底部按钮 + 搜索
 async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_input = update.message.text.strip()
 
@@ -179,7 +175,7 @@ async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.channel_post
-    if not msg or msg.chat.id != Config.CHANNEL_ID:
+    if not msg or str(msg.chat.id) != Config.CHANNEL_ID_EXPECTED:
         return
 
     parsed = parse_message_text(msg.text or msg.caption or "")
@@ -196,7 +192,6 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"✅ 已收录：{title}")
 
 
-# 内联按钮处理
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     try:
