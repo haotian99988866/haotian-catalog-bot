@@ -1,1 +1,2 @@
-python-telegram-bot==20.7
+python-telegram-bot==21.11
+httpcore>=1.0.9
