@@ -5,9 +5,10 @@ def parse_message_text(text: str) -> dict:
     m = re.search(r"《([^》]+)》", text)
     if not m: return None
     full = m.group(1).strip()
-    epm = re.search(r"\s+(第[零一二三四五六七八九十百\d]+(?:集|季|期)|[上下]部)$", full)
+    epm = re.search(r"\s+(第\s*\d+\s*(?:集|期|季|部)|[上下]部)\s*$", full)
     if epm:
-        work = re.sub(r"\s+(?:第(?:集|季|期)|[上下]部)$", "", full).strip()
+        work = re.sub(r"\s+第\s*\d+\s*(?:集|期|季|部)\s*$", "", full).strip()
+        work = re.sub(r"\s+[上下]部\s*$", "", work).strip()
         ep = epm.group(1)
     else:
         work = full
