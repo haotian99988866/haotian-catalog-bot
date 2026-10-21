@@ -1,4 +1,4 @@
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from database import (
     get_all_shows,
@@ -11,9 +11,9 @@ from parsers import parse_message_text
 from config import Config
 
 
-# ===== 固定底部键盘 =====
+# ===== 固定在输入框上方的底部键盘 =====
 main_keyboard = ReplyKeyboardMarkup(
-    [
+    keyboard=[
         [
             KeyboardButton("📺 全部影片"),
             KeyboardButton("🔍 搜索")
@@ -23,13 +23,14 @@ main_keyboard = ReplyKeyboardMarkup(
             KeyboardButton("ℹ️ 帮助")
         ]
     ],
-    resize_keyboard=True,
-    persistent=True,
-    one_time_keyboard=False
+    resize_keyboard=True,      # 紧凑显示，不占太大空间
+    persistent=True,           # 一直固定，不会消失
+    one_time_keyboard=False,   # 点击后仍保持显示
+    input_field_placeholder="直接发片名搜索，或点下方按钮"
 )
 
 
-# 生成内联主菜单
+# 内联菜单（消息里的按钮，不影响底部固定键盘）
 def main_inline_keyboard():
     return InlineKeyboardMarkup([
         [
@@ -43,11 +44,10 @@ def main_inline_keyboard():
     ])
 
 
-# 生成影片列表按钮（分页 + 点击跳转详情）
+# 影片列表内联按钮
 def shows_keyboard(shows, page=1, per_page=10):
     total = len(shows)
     total_pages = (total + per_page - 1) // per_page
-
     start = (page - 1) * per_page
     end = start + per_page
     page_shows = shows[start:end]
@@ -73,11 +73,11 @@ def shows_keyboard(shows, page=1, per_page=10):
     return InlineKeyboardMarkup(keyboard) if keyboard else None
 
 
-# 主菜单 —— 主动发送底部键盘
+# 主菜单 —— 首次触发显示底部固定键盘
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """🎬 <b>昊天影院目录</b>
 
-欢迎使用！下方按钮已固定在输入框上方，随时可点：
+欢迎使用！下方按钮已固定在输入框上方，随时可点👇
 
 • 📺 全部影片 — 查看所有收录内容
 • 🔍 搜索 — 按片名查找
@@ -87,34 +87,30 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 也可以直接发片名搜索哦！"""
     await update.message.reply_text(
         text,
-        reply_markup=main_keyboard,
+        reply_markup=main_keyboard,  # 这里把键盘钉在输入框上方！
         parse_mode="HTML"
     )
 
 
-# 开始 —— 首次触发显示底部键盘
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await menu(update, context)
 
 
-# 帮助
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """📖 <b>使用帮助</b>
 
 <b>收录格式：</b>
 《影片名》日期 #标签1 #标签2
 
-<b>搜索方式：</b>
-• 直接发片名关键词
-• 点底部「搜索」按钮
-• 点「按标签」筛选
+<b>使用方式：</b>
+• 直接发片名关键词搜索
+• 点底部固定按钮快速访问
 
 <b>频道链接：</b>
 {link}""".format(link=Config.CHANNEL_LINK)
     await update.message.reply_text(text, parse_mode="HTML")
 
 
-# 列出全部
 async def list_shows(update: Update, context: ContextTypes.DEFAULT_TYPE):
     shows = get_all_shows()
     if not shows:
@@ -130,14 +126,12 @@ async def list_shows(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# 搜索命令
 async def search_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🔍 请直接发片名关键词给我，我帮你找！"
     )
 
 
-# 按标签浏览
 async def tags_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     shows = get_all_shows()
     all_tags = {}
@@ -155,11 +149,10 @@ async def tags_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="HTML")
 
 
-# 消息处理 —— 优先匹配底部按钮
+# 优先响应底部按钮
 async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_input = update.message.text.strip()
 
-    # 优先处理底部按钮文字
     if text_input == "📺 全部影片":
         await list_shows(update, context)
         return
@@ -173,7 +166,6 @@ async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await help_cmd(update, context)
         return
 
-    # 普通搜索
     shows = search_shows(text_input)
     if not shows:
         reply_text = f"🔍 搜索：<b>{text_input}</b>\n\n没有找到相关影片"
@@ -189,7 +181,6 @@ async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# 频道消息监听
 async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.channel_post
     if not msg or msg.chat.id != Config.CHANNEL_ID:
@@ -206,7 +197,7 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"✅ 已收录：{parsed['title']}")
 
 
-# 内联按钮回调 —— 补全 show_detail 处理
+# 内联按钮处理
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -215,7 +206,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "main_menu":
         text = """🎬 <b>昊天影院目录</b>
 
-欢迎使用！下方按钮已固定在输入框上方，随时可点：
+欢迎使用！下方按钮已固定在输入框上方，随时可点👇
 
 • 📺 全部影片 — 查看所有收录内容
 • 🔍 搜索 — 按片名查找
@@ -294,10 +285,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <b>收录格式：</b>
 《影片名》日期 #标签1 #标签2
 
-<b>搜索方式：</b>
-• 直接发片名关键词
-• 点底部「搜索」按钮
-• 点「按标签」筛选
+<b>使用方式：</b>
+• 直接发片名关键词搜索
+• 点底部固定按钮快速访问
 
 <b>频道链接：</b>
 {link}""".format(link=Config.CHANNEL_LINK)
