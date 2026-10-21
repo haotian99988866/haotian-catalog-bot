@@ -72,7 +72,6 @@ def works_list_keyboard(works, page=1, per_page=8):
 def episodes_keyboard(work_data, from_page=1):
     eps = work_data["episodes"]
     
-    # 按数字排序
     import re
     def ep_sort_key(e):
         nums = re.findall(r"\d+", e["episode"])
@@ -101,7 +100,8 @@ async def send_menu_kb(update: Update, text: str):
     )
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ✅ 补上 menu 函数，和 bot.py 对应
+async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """🎬 <b>昊天影院目录</b>
 
 欢迎使用👇
@@ -113,6 +113,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 直接发片名也能搜索哦！"""
     await send_menu_kb(update, text)
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await menu(update, context)
+
+
+async def list_shows(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await list_all_works(update, context)
 
 
 async def list_all_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -127,6 +135,10 @@ async def list_all_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=works_list_keyboard(works),
         parse_mode="HTML"
     )
+
+
+async def search_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await search_work(update, context)
 
 
 async def search_work(update: Update, context: ContextTypes.DEFAULT_TYPE, keyword=None):
@@ -169,19 +181,18 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_menu_kb(update, text)
 
 
-# ✅ 频道监听 — 修正匹配逻辑
+# 频道监听
 async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.channel_post
     if not msg:
         return
     
-    # 兼容两种格式：整数/字符串
     if str(msg.chat.id) != str(Config.CHANNEL_ID_EXPECTED):
         return
 
     parsed = parse_message_text(msg.text or msg.caption or "")
     if not parsed:
-        print(f"ℹ️ 消息格式不匹配，跳过：{msg.text or msg.caption}")
+        print(f"ℹ️ 消息格式不匹配，跳过")
         return
 
     work_name = parsed["work_name"]
@@ -197,7 +208,7 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # 底部按钮 + 文本搜索
-async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
 
     if text == "🎬 全部影片":
