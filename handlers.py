@@ -11,7 +11,7 @@ from parsers import parse_message_text
 from config import Config
 
 
-# ========== 底部固定键盘 ==========
+# ===== 固定底部键盘（修正参数写法）=====
 main_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [
@@ -24,12 +24,11 @@ main_keyboard = ReplyKeyboardMarkup(
         ]
     ],
     resize_keyboard=True,
-    persistent=True,
-    one_time_keyboard=False
+    one_time_keyboard=False  # 点击后不消失，等效固定效果 ✅
 )
 
 
-# 内联菜单（消息里的按钮）
+# 内联菜单
 def main_inline_keyboard():
     return InlineKeyboardMarkup([
         [
@@ -86,7 +85,7 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 也可以直接发片名搜索哦！"""
     await update.message.reply_text(
         text,
-        reply_markup=main_keyboard,  # ← 关键：这里把键盘钉在底部！
+        reply_markup=main_keyboard,
         parse_mode="HTML"
     )
 
@@ -203,7 +202,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "main_menu":
         text = """🎬 <b>昊天影院目录</b>
 
-请选择功能："""
+欢迎使用！请选择功能："""
         await query.edit_message_text(
             text,
             reply_markup=main_inline_keyboard(),
