@@ -23,8 +23,9 @@ main_keyboard = ReplyKeyboardMarkup(
             KeyboardButton("ℹ️ 帮助")
         ]
     ],
-    resize_keyboard=True,  # 自动适配按钮大小
-    persistent=True        # 固定显示在输入框上方
+    resize_keyboard=True,
+    persistent=True,
+    one_time_keyboard=False
 )
 
 
@@ -72,7 +73,7 @@ def shows_keyboard(shows, page=1, per_page=10):
     return InlineKeyboardMarkup(keyboard) if keyboard else None
 
 
-# 主菜单 —— 同时显示底部固定键盘
+# 主菜单 —— 主动发送底部键盘
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """🎬 <b>昊天影院目录</b>
 
@@ -86,12 +87,12 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 也可以直接发片名搜索哦！"""
     await update.message.reply_text(
         text,
-        reply_markup=main_keyboard,  # 这里固定底部键盘
+        reply_markup=main_keyboard,
         parse_mode="HTML"
     )
 
 
-# 开始
+# 开始 —— 首次触发显示底部键盘
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await menu(update, context)
 
@@ -154,11 +155,11 @@ async def tags_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="HTML")
 
 
-# 直接搜索 / 底部按钮文字匹配
+# 消息处理 —— 优先匹配底部按钮
 async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_input = update.message.text.strip()
 
-    # 匹配底部按钮文字
+    # 优先处理底部按钮文字
     if text_input == "📺 全部影片":
         await list_shows(update, context)
         return
@@ -172,16 +173,18 @@ async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await help_cmd(update, context)
         return
 
-    # 普通关键词搜索
+    # 普通搜索
     shows = search_shows(text_input)
     if not shows:
         reply_text = f"🔍 搜索：<b>{text_input}</b>\n\n没有找到相关影片"
+        keyboard = None
     else:
         reply_text = f"🔍 搜索：<b>{text_input}</b>（找到 {len(shows)} 部）"
+        keyboard = shows_keyboard(shows)
 
     await update.message.reply_text(
         reply_text,
-        reply_markup=shows_keyboard(shows) if shows else None,
+        reply_markup=keyboard,
         parse_mode="HTML"
     )
 
@@ -203,7 +206,7 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"✅ 已收录：{parsed['title']}")
 
 
-# 内联按钮回调处理
+# 内联按钮回调 —— 补全 show_detail 处理
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -216,11 +219,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 • 📺 全部影片 — 查看所有收录内容
 • 🔍 搜索 — 按片名查找
-• 🏷️ 按标签浏览 — 按分类筛选
-• ℹ️ 使用帮助 — 查看说明
+• 🏷️ 按标签 — 按分类筛选
+• ℹ️ 帮助 — 查看说明
 
 也可以直接发片名搜索哦！"""
-        await query.edit_message_text(text, reply_markup=main_inline_keyboard(), parse_mode="HTML")
+        await query.edit_message_text(
+            text,
+            reply_markup=main_inline_keyboard(),
+            parse_mode="HTML"
+        )
 
     elif data == "list_all":
         shows = get_all_shows()
