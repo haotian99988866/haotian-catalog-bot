@@ -12,7 +12,7 @@ from parsers import parse_message_text
 from config import Config
 
 
-# ===== ✅ 美化后的底部键盘 =====
+# ===== 美化后的底部键盘 =====
 main_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [
@@ -179,7 +179,7 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     title = parsed["title"]
     if show_exists(title):
-        # ✅ 已存在就更新 message_id，补全旧链接
+        # 已存在就更新 message_id，补全旧链接
         update_message_id(title, msg.message_id)
         print(f"🔄 已补全链接：{title}")
         return
@@ -188,19 +188,26 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"✅ 已收录：{title}")
 
 
-# 内联按钮处理
+# 内联按钮处理 —— 移除旧分支 + 防超时报错
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    
+    # 防超时：静默忽略过期查询
+    try:
+        await query.answer()
+    except Exception:
+        return
+
     data = query.data
 
     if data == "no_link":
         await query.answer(
-            text="暂无链接 → 频道重新发送该内容即可自动补全 ✅",
+            text="暂无链接 → 频道重新发送该内容即可补全 ✅",
             show_alert=True
         )
+        return
 
-    elif data == "list_all":
+    if data == "list_all":
         shows = get_all_shows()
         if not shows:
             text = "📭 暂无收录内容，频道发一条消息开始收录吧！"
@@ -208,10 +215,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             text = f"📋 <b>全部收录（共 {len(shows)} 部）</b>\n片名直接点即可跳转观看👇"
             keyboard = shows_keyboard(shows)
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+        try:
+            await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+        except Exception:
+            pass
+        return
 
-    elif data.startswith("page:"):
+    if data.startswith("page:"):
         page = int(data.split(":")[1])
         shows = get_all_shows()
         keyboard = shows_keyboard(shows, page)
-        await query.edit_message_reply_markup(reply_markup=keyboard)
+        try:
+            await query.edit_message_reply_markup(reply_markup=keyboard)
+        except Exception:
+            pass
+        return
