@@ -1,6 +1,21 @@
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler,
+    CallbackQueryHandler, filters
+)
+from telegram.ext.filters import UpdateType
+from config import Config
+from database import init_db
+from handlers import (
+    start, help_cmd, menu, list_shows,
+    search_cmd, direct_search, button_handler, channel_listener
+)
+
+
 def main():
-    # 初始化配置与数据库
+    # 验证配置
     Config.validate()
+    
+    # 初始化数据库
     init_db()
     
     # 创建应用
@@ -28,10 +43,9 @@ def main():
     print(f"🔗 频道链接: {Config.CHANNEL_LINK}")
     print("=" * 50)
     
-    # ⚠️ 关键：直接调用，不包 asyncio.run()
+    # 启动机器人
     app.run_polling()
 
 
 if __name__ == "__main__":
-    # 干净的入口，不额外包装
     main()
