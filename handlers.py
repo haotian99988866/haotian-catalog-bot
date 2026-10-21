@@ -1,107 +1,49 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-from database import (
-    init_db,
-    add_episode,
-    update_message_id_if_exists,
-    get_all_works,
-    get_episodes_of_work,
-    search_works_by_keyword
-)
+from database import init_db, add_episode, update_message_id_if_exists, get_all_works, get_episodes_of_work, search_works_by_keyword
 from parsers import parse_message_text
 from config import Config
 
-
-# 初始化数据库
 init_db()
 
-
-# ===== 底部固定键盘 =====
 main_keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [
-            KeyboardButton("🎬 全部影片"),
-            KeyboardButton("🔎 搜索")
-        ],
-        [
-            KeyboardButton("🏷️ 按标签"),
-            KeyboardButton("❓ 帮助")
-        ]
+        [KeyboardButton("🎬 全部影片"), KeyboardButton("🔎 搜索")],
+        [KeyboardButton("🏷️ 按标签"), KeyboardButton("❓ 帮助")]
     ],
     resize_keyboard=True,
     one_time_keyboard=False,
     input_field_placeholder="输入片名搜索，或点下方按钮"
 )
 
+def build_jump_url(mid: int) -> str:
+    return f"{Config.CHANNEL_LINK.rstrip('/')}/{mid}"
 
-# 生成跳转链接 — 全平台兼容
-def build_jump_url(message_id: int) -> str:
-    base = Config.CHANNEL_LINK.rstrip("/")
-    return f"{base}/{message_id}"
-
-
-# 作品列表入口
-def works_list_keyboard(works, page=1, per_page=8):
+def works_list_kb(works, page=1, per_page=8):
     total = len(works)
     total_pages = (total + per_page - 1) // per_page
     start = (page - 1) * per_page
-    end = start + per_page
-    page_works = works[start:end]
+    page_works = works[start:start + per_page]
+    kb = []
+    for w in page_works:
+        kb.append([InlineKeyboardButton(f"📺 {w['work_name']} ({w['total_episodes']}集)", callback_data=f"show_eps:{w['work_name']}")])
+    nav = []
+    if page > 1: nav.append(InlineKeyboardButton("⬅️ 上一页", callback_data=f"list_page:{page-1}"))
+    if page < total_pages: nav.append(InlineKeyboardButton("下一页 ➡️", callback_data=f"list_page:{page+1}"))
+    if nav: kb.append(nav)
+    return InlineKeyboardMarkup(kb) if kb else None
 
-    keyboard = []
-    for idx, work in enumerate(page_works, start + 1):
-        keyboard.append([
-            InlineKeyboardButton(
-                f"📺 {work['work_name']} ({work['total_episodes']}集)",
-                callback_data=f"show_eps:{work['work_name']}"
-            )
-        ])
-
-    nav_row = []
-    if page > 1:
-        nav_row.append(InlineKeyboardButton("⬅️ 上一页", callback_data=f"list_page:{page-1}"))
-    if page < total_pages:
-        nav_row.append(InlineKeyboardButton("下一页 ➡️", callback_data=f"list_page:{page+1}"))
-    if nav_row:
-        keyboard.append(nav_row)
-
-    return InlineKeyboardMarkup(keyboard) if keyboard else None
-
-
-# 集数列表
-def episodes_keyboard(work_data, from_page=1):
-    eps = work_data["episodes"]
-    
+def episodes_kb(wdata, from_page=1):
     import re
-    def ep_sort_key(e):
-        nums = re.findall(r"\d+", e["episode"])
-        return int(nums[0]) if nums else 99999
-    
-    eps.sort(key=ep_sort_key)
+    eps = sorted(wdata["episodes"], key=lambda e: int(n[0]) if (n := re.findall(r"\d+", e["episode"])) else 99999)
+    kb = [InlineKeyboardButton(f"▶ {e['episode']}", url=build_jump_url(e["message_id"])) for e in eps]
+    kb.append([InlineKeyboardButton("⬅️ 返回作品列表", callback_data=f"back_to_list:{from_page}")])
+    return InlineKeyboardMarkup(kb)
 
-    keyboard = []
-    for ep in eps:
-        url = build_jump_url(ep["message_id"])
-        keyboard.append([
-            InlineKeyboardButton(f"▶ {ep['episode']}", url=url)
-        ])
+async def send_menu_kb(u: Update, t: str):
+    await u.message.reply_text(t, reply_markup=main_keyboard, parse_mode="HTML")
 
-    keyboard.append([
-        InlineKeyboardButton("⬅️ 返回作品列表", callback_data=f"back_to_list:{from_page}")
-    ])
-    return InlineKeyboardMarkup(keyboard)
-
-
-async def send_menu_kb(update: Update, text: str):
-    await update.message.reply_text(
-        text,
-        reply_markup=main_keyboard,
-        parse_mode="HTML"
-    )
-
-
-# ✅ 补上 menu 函数，和 bot.py 对应
-async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def menu(u: Update, c: ContextTypes.DEFAULT_TYPE):
     text = """🎬 <b>昊天影院目录</b>
 
 欢迎使用👇
@@ -112,164 +54,74 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • ❓ 帮助 — 使用说明
 
 直接发片名也能搜索哦！"""
-    await send_menu_kb(update, text)
+    await send_menu_kb(u, text)
 
+async def start(u: Update, c: ContextTypes.DEFAULT_TYPE):
+    await menu(u, c)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await menu(update, context)
-
-
-async def list_shows(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await list_all_works(update, context)
-
-
-async def list_all_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def list_shows(u: Update, c: ContextTypes.DEFAULT_TYPE):
     works = get_all_works()
     if not works:
-        await send_menu_kb(update, "📭 暂无收录，频道发消息开始收录吧！\n格式：《片名》第X集 #标签")
+        await send_menu_kb(u, "📭 暂无收录，频道发消息开始收录吧！\n格式：《片名》第X集 #标签")
         return
+    await u.message.reply_text(f"📋 <b>全部收录（共 {len(works)} 部作品）</b>\n点作品展开集数👇", reply_markup=works_list_kb(works), parse_mode="HTML")
 
-    text = f"📋 <b>全部收录（共 {len(works)} 部作品）</b>\n点作品展开集数👇"
-    await update.message.reply_text(
-        text,
-        reply_markup=works_list_keyboard(works),
-        parse_mode="HTML"
-    )
+async def search_cmd(u: Update, c: ContextTypes.DEFAULT_TYPE):
+    await send_menu_kb(u, "🔎 请直接发片名关键词给我！")
 
-
-async def search_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await search_work(update, context)
-
-
-async def search_work(update: Update, context: ContextTypes.DEFAULT_TYPE, keyword=None):
-    if not keyword:
-        await send_menu_kb(update, "🔎 请直接发片名关键词给我！")
-        return
-
-    works = search_works_by_keyword(keyword)
+async def search_work(u: Update, c: ContextTypes.DEFAULT_TYPE, kw=None):
+    if not kw: return await search_cmd(u, c)
+    works = search_works_by_keyword(kw)
     if not works:
-        text = f"🔎 搜索：<b>{keyword}</b>\n\n没有找到相关作品"
-        await send_menu_kb(update, text)
+        await send_menu_kb(u, f"🔎 搜索：<b>{kw}</b>\n\n没有找到相关作品")
         return
+    await u.message.reply_text(f"🔎 搜索：<b>{kw}</b>（找到 {len(works)} 部）\n点作品展开集数👇", reply_markup=works_list_kb(works), parse_mode="HTML")
 
-    text = f"🔎 搜索：<b>{keyword}</b>（找到 {len(works)} 部）\n点作品展开集数👇"
-    await update.message.reply_text(
-        text,
-        reply_markup=works_list_keyboard(works),
-        parse_mode="HTML"
-    )
+async def tags_cmd(u: Update, c: ContextTypes.DEFAULT_TYPE):
+    await send_menu_kb(u, "🏷️ 标签功能开发中，敬请期待！")
 
-
-async def tags_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_menu_kb(update, "🏷️ 标签功能开发中，敬请期待！")
-
-
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = f"""📖 <b>使用帮助</b>
+async def help_cmd(u: Update, c: ContextTypes.DEFAULT_TYPE):
+    await send_menu_kb(u, f"""📖 <b>使用帮助</b>
 
 <b>收录格式：</b>
 《作品名》第X集 #标签1 #标签2
-示例：《伟大的长征》第一集 #历史
-
-<b>使用方式：</b>
-• 点作品 → 展开全部集数
-• 点集数 → 直接跳转播放
-• 手机/电脑端都正常打开
 
 <b>频道链接：</b>
-{Config.CHANNEL_LINK}"""
-    await send_menu_kb(update, text)
+{Config.CHANNEL_LINK}""")
 
-
-# 频道监听
-async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.channel_post
-    if not msg:
-        return
-    
-    if str(msg.chat.id) != str(Config.CHANNEL_ID_EXPECTED):
-        return
-
+async def channel_listener(u: Update, c: ContextTypes.DEFAULT_TYPE):
+    msg = u.channel_post
+    if not msg or str(msg.chat.id) != str(Config.CHANNEL_ID_EXPECTED): return
     parsed = parse_message_text(msg.text or msg.caption or "")
-    if not parsed:
-        print(f"ℹ️ 消息格式不匹配，跳过")
+    if not parsed: return
+    wn, ep = parsed["work_name"], parsed["episode"]
+    if update_message_id_if_exists(wn, ep, msg.message_id):
+        print(f"🔄 更新链接：{wn} - {ep}")
         return
+    add_episode(wn, ep, parsed.get("tags", []), msg.message_id)
+    print(f"✅ 已收录：{wn} - {ep}")
 
-    work_name = parsed["work_name"]
-    episode = parsed["episode"]
-    msg_id = msg.message_id
+async def direct_search(u: Update, c: ContextTypes.DEFAULT_TYPE):
+    t = u.message.text.strip()
+    if t == "🎬 全部影片": await list_shows(u, c)
+    elif t == "🔎 搜索": await search_cmd(u, c)
+    elif t == "🏷️ 按标签": await tags_cmd(u, c)
+    elif t == "❓ 帮助": await help_cmd(u, c)
+    else: await search_work(u, c, kw=t)
 
-    if update_message_id_if_exists(work_name, episode, msg_id):
-        print(f"🔄 更新链接：{work_name} - {episode}")
-        return
-
-    add_episode(work_name, episode, parsed.get("tags", []), msg_id)
-    print(f"✅ 已收录：{work_name} - {episode}")
-
-
-# 底部按钮 + 文本搜索
-async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
-
-    if text == "🎬 全部影片":
-        await list_all_works(update, context)
-        return
-    if text == "🔎 搜索":
-        await search_work(update, context)
-        return
-    if text == "🏷️ 按标签":
-        await tags_cmd(update, context)
-        return
-    if text == "❓ 帮助":
-        await help_cmd(update, context)
-        return
-
-    await search_work(update, context, keyword=text)
-
-
-# 内联按钮处理
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    try:
-        await query.answer()
-    except Exception:
-        return
-
-    data = query.data
-
-    if data.startswith("show_eps:"):
-        work_name = data.split(":", 1)[1]
-        work = get_episodes_of_work(work_name)
-        if not work:
-            await query.answer("该作品不存在", show_alert=True)
-            return
-
-        text = f"📺 <b>{work_name}</b> — 共 {work['total_episodes']} 集\n点集数直接跳转👇"
-        await query.edit_message_text(
-            text,
-            reply_markup=episodes_keyboard(work),
-            parse_mode="HTML"
-        )
-        return
-
-    if data.startswith("list_page:"):
-        page = int(data.split(":")[1])
-        works = get_all_works()
-        text = f"📋 <b>全部收录</b>\n点作品展开集数👇"
-        await query.edit_message_text(
-            text,
-            reply_markup=works_list_keyboard(works, page),
-            parse_mode="HTML"
-        )
-        return
-
-    if data.startswith("back_to_list:"):
-        page = int(data.split(":")[1])
-        works = get_all_works()
-        text = f"📋 <b>全部收录</b>\n点作品展开集数👇"
-        await query.edit_message_text(
-            text,
-            reply_markup=works_list_keyboard(works, page),
-            parse_mode="HTML"
-        )
-        return
+async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
+    q = u.callback_query
+    try: await q.answer()
+    except: return
+    d = q.data
+    if d.startswith("show_eps:"):
+        wn = d.split(":", 1)[1]
+        w = get_episodes_of_work(wn)
+        if not w: await q.answer("该作品不存在", show_alert=True); return
+        await q.edit_message_text(f"📺 <b>{wn}</b> — 共 {w['total_episodes']} 集\n点集数直接跳转👇", reply_markup=episodes_kb(w), parse_mode="HTML")
+    elif d.startswith("list_page:"):
+        page = int(d.split(":")[1])
+        await q.edit_message_text("📋 <b>全部收录</b>\n点作品展开集数👇", reply_markup=works_list_kb(get_all_works(), page), parse_mode="HTML")
+    elif d.startswith("back_to_list:"):
+        page = int(d.split(":")[1])
+        await q.edit_message_text("📋 <b>全部收录</b>\n点作品展开集数👇", reply_markup=works_list_kb(get_all_works(), page), parse_mode="HTML")
