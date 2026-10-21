@@ -1,3 +1,4 @@
+import asyncio
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     CallbackQueryHandler, filters
@@ -11,30 +12,20 @@ from handlers import (
 )
 
 
-def main():
-    # 验证配置
+async def main():
     Config.validate()
-    
-    # 初始化数据库
     init_db()
     
-    # 创建应用
     app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
     
-    # 注册命令处理器
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("menu", menu))
     app.add_handler(CommandHandler("search", search_cmd))
     app.add_handler(CommandHandler("list", list_shows))
     app.add_handler(CommandHandler("help", help_cmd))
     
-    # 按钮回调
     app.add_handler(CallbackQueryHandler(button_handler))
-    
-    # 频道新消息监听
     app.add_handler(MessageHandler(UpdateType.CHANNEL_POST, channel_listener))
-    
-    # 私聊直接搜索
     app.add_handler(MessageHandler(UpdateType.MESSAGE & ~filters.COMMAND, direct_search))
     
     print("=" * 50)
@@ -43,9 +34,8 @@ def main():
     print(f"🔗 频道链接: {Config.CHANNEL_LINK}")
     print("=" * 50)
     
-    # ⚠️ 官方标准写法：直接调用，不包 asyncio.run()
-    app.run_polling()
+    await app.run_polling()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
