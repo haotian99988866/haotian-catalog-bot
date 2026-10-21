@@ -1,6 +1,10 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
-from database import get_episodes_of_work, get_all_works
+from database import get_episodes_of_work, get_all_works, add_or_update_work
+import logging
+import re
+
+logger = logging.getLogger(__name__)
 
 # ========== 内联键盘函数 ==========
 def main_kb():
@@ -54,6 +58,24 @@ main_reply_kb = ReplyKeyboardMarkup(
     input_field_placeholder="输入片名搜索，或点下方按钮"
 )
 
+# 汉字数字转阿拉伯数字
+chinese_num_map = {
+    "零":0,"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9,"十":10,
+    "十一":11,"十二":12,"十三":13,"十四":14,"十五":15,"十六":16,"十七":17,"十八":18,"十九":19,"二十":20
+}
+def chinese_to_num(s):
+    if s.isdigit():
+        return int(s)
+    if s in chinese_num_map:
+        return chinese_num_map[s]
+    for cn, val in chinese_num_map.items():
+        if s.endswith(cn) and len(s) > len(cn):
+            try:
+                return int(s[:-len(cn)]) + val
+            except:
+                pass
+    return None
+
 # ========== 消息处理函数 ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """🎬 <b>昊天影院目录</b>
@@ -92,6 +114,7 @@ async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>收录格式：</b>
 《作品名》第X集 #标签1 #标签2
+支持写法：《片名》第4集 / 《片名》第四集 / 《片名》第四集04
 综艺：《综艺名》第X期 #综艺
 
 <b>说明：</b>
@@ -112,32 +135,52 @@ async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """监听频道消息，解析收录内容"""
-    text = update.channel_post.text if update.channel_post else ""
+    """监听频道消息 — 支持汉字数字+后缀编号"""
+    text = ""
+    if update.channel_post:
+        text = update.channel_post.text or update.channel_post.caption or ""
+    
+    text = text.strip()
     if not text:
         return
 
-    # 简易解析：《片名》第X集
-    import re
-    match = re.search(r"《(.+?)》\s*第(\d+)集", text)
-    if not match:
-        match = re.search(r"《(.+?)》\s*第(\d+)期", text)
+    logger.info(f"📥 收到频道消息: {text}")
+
+    # 匹配：《片名》第[汉字/数字][集/期][数字后缀]
+    match = re.search(r"《\s*(.+?)\s*》\s*第\s*([一二三四五六七八九十\d]+)\s*(?:集|期)\s*(\d+)?", text)
     
-    if match:
-        name = match.group(1).strip()
-        episode = int(match.group(2))
-        # 获取现有作品或新建
-        existing = get_episodes_of_work(name)
-        if existing:
-            uploaded = existing["uploaded_list"] + [episode]
-            total = max(existing["total_episodes"], episode)
-        else:
-            uploaded = [episode]
-            total = episode  # 默认当前为最新集
-        
-        from database import add_or_update_work
-        add_or_update_work(name, total, sorted(set(uploaded)))
-        await update.message.reply_text(f"✅ 已收录：《{name}》第{episode}集")
+    if not match:
+        logger.info("⚠️  未匹配到收录格式")
+        return
+
+    name = match.group(1).strip()
+    num_part = match.group(2).strip()
+    suffix_num = match.group(3)  # 捕获"第四集04"里的04
+
+    # 优先用后缀数字，否则转换汉字数字
+    if suffix_num:
+        episode = int(suffix_num)
+    else:
+        episode = chinese_to_num(num_part)
+        if not episode:
+            logger.info(f"⚠️  集数解析失败: {num_part}")
+            return
+
+    # 更新数据库
+    existing = get_episodes_of_work(name)
+    if existing:
+        uploaded = existing["uploaded_list"] + [episode]
+        total = max(existing["total_episodes"], episode)
+    else:
+        uploaded = [episode]
+        total = episode
+    
+    uploaded = sorted(set(uploaded))
+    add_or_update_work(name, total, uploaded)
+    
+    reply_text = f"✅ 已收录：《{name}》第{episode}集\n📊 已收录 {len(uploaded)} 集"
+    await update.effective_chat.send_message(reply_text)
+    logger.info(f"✅ 收录成功: 《{name}》第{episode}集")
 
 # ========== 按钮回调处理 ==========
 async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
@@ -211,8 +254,11 @@ async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
 
     elif d == "help":
         help_text = """📖 使用说明：
-格式：《片名》第X集 #标签
-综艺：《综艺名》第X期 #标签
+支持格式：
+《片名》第4集
+《片名》第四集
+《片名》第四集04
+《片名》第4集 #标签
 """
         await q.edit_message_text(
             help_text,
