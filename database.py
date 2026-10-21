@@ -102,7 +102,7 @@ def get_shows_by_tags(tag: str) -> List[Dict]:
     c.execute("SELECT id, title, tags, created_at FROM shows ORDER BY created_at DESC")
     rows = c.fetchall()
     conn.close()
-    
+
     return [
         {
             "id": row[0],
