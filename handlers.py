@@ -1,8 +1,8 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import ContextTypes.DEFAULT_TYPE
+from telegram.ext import ContextTypes, ApplicationHandler
 from database import get_episodes_of_work, get_all_works
 
-# ========== 键盘函数（直接放这里，不用单独文件） ==========
+# ========== 键盘函数 ==========
 def main_kb():
     return InlineKeyboardMarkup([
         [
@@ -16,7 +16,6 @@ def main_kb():
     ])
 
 def episodes_kb(work):
-    # 生成集数列表键盘，按需修改即可
     total = work.get("total_episodes", 0)
     uploaded = work.get("uploaded_list", [])
     buttons = []
@@ -30,11 +29,10 @@ def episodes_kb(work):
             row = []
     if row:
         buttons.append(row)
-    buttons.append([InlineKeyboardButton("◀ 返回", callback_data=f"list_page:1")])
+    buttons.append([InlineKeyboardButton("◀ 返回", callback_data="list_page:1")])
     return InlineKeyboardMarkup(buttons)
 
 def works_list_kb(works, page=1):
-    # 作品列表分页键盘，按需修改即可
     buttons = []
     for w in works:
         buttons.append([InlineKeyboardButton(
@@ -55,12 +53,10 @@ async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
 
     d = q.data
 
-    # 无操作
     if d == "noop":
         await q.answer("该集/期暂未上传", show_alert=True)
         return
 
-    # 显示作品集数
     if d.startswith("show_eps:"):
         wn = d.split(":", 1)[1]
         w = get_episodes_of_work(wn)
@@ -73,7 +69,6 @@ async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-    # 作品列表分页
     elif d.startswith("list_page:"):
         page = int(d.split(":", 1)[1])
         works = get_all_works()
@@ -83,7 +78,6 @@ async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-    # 返回列表
     elif d.startswith("back_to_list:"):
         page = int(d.split(":", 1)[1])
         works = get_all_works()
@@ -93,7 +87,6 @@ async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-    # 全部影片
     elif d == "all_movies":
         works = get_all_works()
         if not works:
@@ -106,7 +99,6 @@ async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-    # 搜索
     elif d == "search":
         await q.edit_message_text(
             "🔍 请输入片名搜索：",
@@ -114,7 +106,6 @@ async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-    # 按标签
     elif d == "by_tag":
         await q.edit_message_text(
             "🏷️ 请选择标签：",
@@ -122,7 +113,6 @@ async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-    # 帮助
     elif d == "help":
         help_text = """📖 使用说明：
 格式：《片名》第X集 #标签
