@@ -5,30 +5,32 @@ from database import (
     search_shows,
     get_shows_by_tags,
     add_show,
-    show_exists
+    show_exists,
+    update_message_id
 )
 from parsers import parse_message_text
 from config import Config
 
 
-# ===== 底部固定键盘 =====
+# ===== ✅ 美化后的底部键盘 =====
 main_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [
-            KeyboardButton("📺 全部影片"),
-            KeyboardButton("🔍 搜索")
+            KeyboardButton("🎬 全部影片"),
+            KeyboardButton("🔎 搜索")
         ],
         [
             KeyboardButton("🏷️ 按标签"),
-            KeyboardButton("ℹ️ 帮助")
+            KeyboardButton("❓ 帮助")
         ]
     ],
     resize_keyboard=True,
-    one_time_keyboard=False
+    one_time_keyboard=False,
+    input_field_placeholder="请输入片名搜索，或点下方按钮"
 )
 
 
-# 影片列表 —— 直接跳转，无详情页，去掉返回主菜单
+# 影片列表 —— 直接跳转，无详情页，无返回主菜单
 def shows_keyboard(shows, page=1, per_page=10):
     total = len(shows)
     total_pages = (total + per_page - 1) // per_page
@@ -41,11 +43,11 @@ def shows_keyboard(shows, page=1, per_page=10):
         if show.get("message_id"):
             jump_url = f"{Config.CHANNEL_LINK}?single&msg={show['message_id']}"
             keyboard.append([
-                InlineKeyboardButton(f"{idx}. {show['title']}", url=jump_url)
+                InlineKeyboardButton(f"▶ {idx}. {show['title']}", url=jump_url)
             ])
         else:
             keyboard.append([
-                InlineKeyboardButton(f"{idx}. {show['title']} (暂无链接)", callback_data="no_link")
+                InlineKeyboardButton(f"📂 {idx}. {show['title']}", callback_data="no_link")
             ])
 
     nav_row = []
@@ -56,7 +58,6 @@ def shows_keyboard(shows, page=1, per_page=10):
     if nav_row:
         keyboard.append(nav_row)
 
-    # ✅ 去掉了「返回主菜单」按钮
     return InlineKeyboardMarkup(keyboard) if keyboard else None
 
 
@@ -64,14 +65,14 @@ def shows_keyboard(shows, page=1, per_page=10):
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """🎬 <b>昊天影院目录</b>
 
-欢迎使用！片名直接跳转观看👇
+欢迎使用！片名直接点击跳转观看👇
 
-• 📺 全部影片 — 查看所有收录内容
-• 🔍 搜索 — 按片名查找
+• 🎬 全部影片 — 查看所有收录内容
+• 🔎 搜索 — 按片名快速查找
 • 🏷️ 按标签 — 按分类筛选
-• ℹ️ 帮助 — 查看说明
+• ❓ 帮助 — 使用说明
 
-也可以直接发片名搜索哦！"""
+也可以直接发片名关键词搜索哦！"""
     await update.message.reply_text(
         text,
         reply_markup=main_keyboard,
@@ -91,7 +92,8 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>使用方式：</b>
 • 直接发片名关键词搜索
-• 片名直接点就跳转观看
+• 片名直接点击跳转观看
+• 频道重新发送旧内容可补全链接
 
 <b>频道链接：</b>
 {link}""".format(link=Config.CHANNEL_LINK)
@@ -105,7 +107,7 @@ async def list_shows(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text)
         return
 
-    text = f"📋 <b>全部收录（共 {len(shows)} 部）</b>\n片名直接点👇"
+    text = f"📋 <b>全部收录（共 {len(shows)} 部）</b>\n片名直接点即可跳转观看👇"
     await update.message.reply_text(
         text,
         reply_markup=shows_keyboard(shows),
@@ -114,7 +116,7 @@ async def list_shows(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def search_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔍 请直接发片名关键词给我，我帮你找！")
+    await update.message.reply_text("🔎 请直接发片名关键词给我，帮你查找！")
 
 
 async def tags_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -138,25 +140,25 @@ async def tags_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_input = update.message.text.strip()
 
-    if text_input == "📺 全部影片":
+    if text_input == "🎬 全部影片":
         await list_shows(update, context)
         return
-    if text_input == "🔍 搜索":
+    if text_input == "🔎 搜索":
         await search_cmd(update, context)
         return
     if text_input == "🏷️ 按标签":
         await tags_cmd(update, context)
         return
-    if text_input == "ℹ️ 帮助":
+    if text_input == "❓ 帮助":
         await help_cmd(update, context)
         return
 
     shows = search_shows(text_input)
     if not shows:
-        reply_text = f"🔍 搜索：<b>{text_input}</b>\n\n没有找到相关影片"
+        reply_text = f"🔎 搜索：<b>{text_input}</b>\n\n没有找到相关影片"
         keyboard = None
     else:
-        reply_text = f"🔍 搜索：<b>{text_input}</b>（找到 {len(shows)} 部）\n片名直接点👇"
+        reply_text = f"🔎 搜索：<b>{text_input}</b>（找到 {len(shows)} 部）\n片名直接点即可跳转👇"
         keyboard = shows_keyboard(shows)
 
     await update.message.reply_text(
@@ -175,24 +177,28 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not parsed:
         return
 
-    if show_exists(parsed["title"]):
+    title = parsed["title"]
+    if show_exists(title):
+        # ✅ 已存在就更新 message_id，补全旧链接
+        update_message_id(title, msg.message_id)
+        print(f"🔄 已补全链接：{title}")
         return
 
-    add_show(parsed["title"], parsed.get("tags", []), msg.message_id)
-    print(f"✅ 已收录：{parsed['title']}")
+    add_show(title, parsed.get("tags", []), msg.message_id)
+    print(f"✅ 已收录：{title}")
 
 
-# 内联按钮处理 —— 彻底移除 show_detail，不再出现详情页
+# 内联按钮处理
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
 
-    if data == "main_menu":
-        text = """🎬 <b>昊天影院目录</b>
-
-请选择功能："""
-        await query.edit_message_text(text, parse_mode="HTML")
+    if data == "no_link":
+        await query.answer(
+            text="暂无链接 → 频道重新发送该内容即可自动补全 ✅",
+            show_alert=True
+        )
 
     elif data == "list_all":
         shows = get_all_shows()
@@ -200,37 +206,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = "📭 暂无收录内容，频道发一条消息开始收录吧！"
             keyboard = None
         else:
-            text = f"📋 <b>全部收录（共 {len(shows)} 部）</b>\n片名直接点👇"
+            text = f"📋 <b>全部收录（共 {len(shows)} 部）</b>\n片名直接点即可跳转观看👇"
             keyboard = shows_keyboard(shows)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
-
-    elif data == "no_link":
-        await query.answer(text="暂无链接，重新收录此内容即可", show_alert=True)
-
-    elif data == "search":
-        await query.edit_message_text("🔍 请直接发片名关键词给我，我帮你找！", parse_mode="HTML")
-
-    elif data == "tags":
-        shows = get_all_shows()
-        all_tags = {}
-        for show in shows:
-            for tag in show.get("tags", []):
-                all_tags[tag] = all_tags.get(tag, 0) + 1
-
-        if not all_tags:
-            text = "🏷️ 暂无标签内容"
-        else:
-            text = "🏷️ <b>按标签筛选</b>\n\n"
-            for tag, count in sorted(all_tags.items()):
-                text += f"#{tag}  ({count}部)\n"
-        await query.edit_message_text(text, parse_mode="HTML")
-
-    elif data == "help":
-        text = """📖 <b>使用帮助</b>
-
-<b>收录格式：</b>
-《影片名》日期 #标签1 #标签2"""
-        await query.edit_message_text(text, parse_mode="HTML")
 
     elif data.startswith("page:"):
         page = int(data.split(":")[1])
