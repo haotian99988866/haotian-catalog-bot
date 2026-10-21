@@ -1,17 +1,4 @@
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler,
-    CallbackQueryHandler, filters
-)
-from telegram.ext.filters import UpdateType  # 新版过滤器
-
-from config import Config
-from database import init_db
-from handlers import (
-    start, help_cmd, menu, list_shows,
-    search_cmd, direct_search, button_handler, channel_listener
-)
-
-async def main():
+def main():
     # 初始化配置与数据库
     Config.validate()
     init_db()
@@ -29,10 +16,10 @@ async def main():
     # 按钮回调
     app.add_handler(CallbackQueryHandler(button_handler))
     
-    # ✅ 新版写法：频道新消息监听
+    # 频道新消息监听
     app.add_handler(MessageHandler(UpdateType.CHANNEL_POST, channel_listener))
     
-    # ✅ 新版写法：私聊直接搜索
+    # 私聊直接搜索
     app.add_handler(MessageHandler(UpdateType.MESSAGE & ~filters.COMMAND, direct_search))
     
     print("=" * 50)
@@ -41,11 +28,10 @@ async def main():
     print(f"🔗 频道链接: {Config.CHANNEL_LINK}")
     print("=" * 50)
     
-    await app.run_polling()
+    # ⚠️ 关键：直接调用，不包 asyncio.run()
+    app.run_polling()
+
 
 if __name__ == "__main__":
-    import asyncio
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("⚠️  机器人已停止")
+    # 干净的入口，不额外包装
+    main()
