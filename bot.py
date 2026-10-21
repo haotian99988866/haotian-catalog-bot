@@ -1,3 +1,4 @@
+import asyncio
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     CallbackQueryHandler, filters
@@ -11,7 +12,7 @@ from handlers import (
 )
 
 
-def main():
+async def main():
     # 验证配置
     Config.validate()
     
@@ -44,8 +45,8 @@ def main():
     print("=" * 50)
     
     # 启动机器人
-    app.run_polling()
+    await app.run_polling()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
