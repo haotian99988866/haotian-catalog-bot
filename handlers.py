@@ -28,21 +28,7 @@ main_keyboard = ReplyKeyboardMarkup(
 )
 
 
-# 内联主菜单
-def main_inline_keyboard():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📺 全部影片", callback_data="list_all"),
-            InlineKeyboardButton("🔍 搜索", callback_data="search")
-        ],
-        [
-            InlineKeyboardButton("🏷️ 按标签浏览", callback_data="tags"),
-            InlineKeyboardButton("ℹ️ 使用帮助", callback_data="help")
-        ]
-    ])
-
-
-# 影片列表 —— 直接跳转，无详情页
+# 影片列表 —— 直接跳转，无详情页，去掉返回主菜单
 def shows_keyboard(shows, page=1, per_page=10):
     total = len(shows)
     total_pages = (total + per_page - 1) // per_page
@@ -53,13 +39,11 @@ def shows_keyboard(shows, page=1, per_page=10):
     keyboard = []
     for idx, show in enumerate(page_shows, start + 1):
         if show.get("message_id"):
-            # ✅ 直接跳转到原视频消息
             jump_url = f"{Config.CHANNEL_LINK}?single&msg={show['message_id']}"
             keyboard.append([
                 InlineKeyboardButton(f"{idx}. {show['title']}", url=jump_url)
             ])
         else:
-            # 旧数据无 message_id 时提示
             keyboard.append([
                 InlineKeyboardButton(f"{idx}. {show['title']} (暂无链接)", callback_data="no_link")
             ])
@@ -72,7 +56,7 @@ def shows_keyboard(shows, page=1, per_page=10):
     if nav_row:
         keyboard.append(nav_row)
 
-    keyboard.append([InlineKeyboardButton("🏠 返回主菜单", callback_data="main_menu")])
+    # ✅ 去掉了「返回主菜单」按钮
     return InlineKeyboardMarkup(keyboard) if keyboard else None
 
 
@@ -80,7 +64,7 @@ def shows_keyboard(shows, page=1, per_page=10):
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """🎬 <b>昊天影院目录</b>
 
-欢迎使用！点片名直接跳转到视频观看👇
+欢迎使用！片名直接跳转观看👇
 
 • 📺 全部影片 — 查看所有收录内容
 • 🔍 搜索 — 按片名查找
@@ -107,8 +91,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>使用方式：</b>
 • 直接发片名关键词搜索
-• 点底部按钮快速访问
-• 点片名 → 直接跳转观看
+• 片名直接点就跳转观看
 
 <b>频道链接：</b>
 {link}""".format(link=Config.CHANNEL_LINK)
@@ -122,7 +105,7 @@ async def list_shows(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text)
         return
 
-    text = f"📋 <b>全部收录（共 {len(shows)} 部）</b>\n点片名直接跳转观看👇"
+    text = f"📋 <b>全部收录（共 {len(shows)} 部）</b>\n片名直接点👇"
     await update.message.reply_text(
         text,
         reply_markup=shows_keyboard(shows),
@@ -173,7 +156,7 @@ async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_text = f"🔍 搜索：<b>{text_input}</b>\n\n没有找到相关影片"
         keyboard = None
     else:
-        reply_text = f"🔍 搜索：<b>{text_input}</b>（找到 {len(shows)} 部）\n点片名直接跳转观看👇"
+        reply_text = f"🔍 搜索：<b>{text_input}</b>（找到 {len(shows)} 部）\n片名直接点👇"
         keyboard = shows_keyboard(shows)
 
     await update.message.reply_text(
@@ -199,7 +182,7 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"✅ 已收录：{parsed['title']}")
 
 
-# 内联按钮处理
+# 内联按钮处理 —— 彻底移除 show_detail，不再出现详情页
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -209,34 +192,23 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = """🎬 <b>昊天影院目录</b>
 
 请选择功能："""
-        await query.edit_message_text(
-            text,
-            reply_markup=main_inline_keyboard(),
-            parse_mode="HTML"
-        )
+        await query.edit_message_text(text, parse_mode="HTML")
 
     elif data == "list_all":
         shows = get_all_shows()
         if not shows:
             text = "📭 暂无收录内容，频道发一条消息开始收录吧！"
-            keyboard = InlineKeyboardMarkup([[
-                InlineKeyboardButton("🏠 返回主菜单", callback_data="main_menu")
-            ]])
+            keyboard = None
         else:
-            text = f"📋 <b>全部收录（共 {len(shows)} 部）</b>\n点片名直接跳转观看👇"
+            text = f"📋 <b>全部收录（共 {len(shows)} 部）</b>\n片名直接点👇"
             keyboard = shows_keyboard(shows)
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
 
     elif data == "no_link":
-        await query.answer(text="此影片暂无链接", show_alert=True)
+        await query.answer(text="暂无链接，重新收录此内容即可", show_alert=True)
 
     elif data == "search":
-        await query.edit_message_text(
-            "🔍 请直接发片名关键词给我，我帮你找！",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🏠 返回主菜单", callback_data="main_menu")
-            ]])
-        )
+        await query.edit_message_text("🔍 请直接发片名关键词给我，我帮你找！", parse_mode="HTML")
 
     elif data == "tags":
         shows = get_all_shows()
@@ -251,21 +223,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = "🏷️ <b>按标签筛选</b>\n\n"
             for tag, count in sorted(all_tags.items()):
                 text += f"#{tag}  ({count}部)\n"
-
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🏠 返回主菜单", callback_data="main_menu")
-        ]])
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+        await query.edit_message_text(text, parse_mode="HTML")
 
     elif data == "help":
         text = """📖 <b>使用帮助</b>
 
 <b>收录格式：</b>
 《影片名》日期 #标签1 #标签2"""
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🏠 返回主菜单", callback_data="main_menu")
-        ]])
-        await query.edit_message_text(text, reply_markup=keyboard, parse_mode="HTML")
+        await query.edit_message_text(text, parse_mode="HTML")
 
     elif data.startswith("page:"):
         page = int(data.split(":")[1])
