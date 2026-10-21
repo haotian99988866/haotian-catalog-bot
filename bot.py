@@ -17,16 +17,19 @@ logging.basicConfig(
 
 async def main():
     Config.validate()
-    app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
+    application = ApplicationBuilder().token(Config.BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("menu", menu))
-    app.add_handler(MessageHandler(filters.ChatType.CHANNEL, channel_listener))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, direct_search))
-    app.add_handler(CallbackQueryHandler(button_handler))
+    # 注册处理器
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("menu", menu))
+    application.add_handler(MessageHandler(filters.ChatType.CHANNEL, channel_listener))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, direct_search))
+    application.add_handler(CallbackQueryHandler(button_handler))
 
     print("✅ 机器人启动成功！")
-    await app.run_polling()
+    
+    # 标准写法，兼容所有 Python 版本
+    await application.run_polling(close_loop=False)
 
 if __name__ == "__main__":
     asyncio.run(main())
