@@ -5,6 +5,6 @@ class Config:
 
     @classmethod
     def validate(cls):
-        # 只检查是否为空，不再硬编码对比
-        if not cls.BOT_TOKEN or len(cls.BOT_TOKEN) < 30:
-            raise ValueError("请先在 config.py 中填写正确的 BOT_TOKEN")
+        token = cls.BOT_TOKEN.strip()
+        if not token or len(token) < 30 or ":" not in token:
+            raise ValueError("BOT_TOKEN 格式不正确或未填写")
