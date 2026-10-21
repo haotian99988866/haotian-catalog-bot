@@ -34,13 +34,13 @@ main_keyboard = ReplyKeyboardMarkup(
 )
 
 
-# 生成跳转链接
+# 生成跳转链接 — 全平台兼容
 def build_jump_url(message_id: int) -> str:
     base = Config.CHANNEL_LINK.rstrip("/")
     return f"{base}/{message_id}"
 
 
-# 作品列表入口 — 显示总集数
+# 作品列表入口
 def works_list_keyboard(works, page=1, per_page=8):
     total = len(works)
     total_pages = (total + per_page - 1) // per_page
@@ -68,13 +68,13 @@ def works_list_keyboard(works, page=1, per_page=8):
     return InlineKeyboardMarkup(keyboard) if keyboard else None
 
 
-# 集数列表 — 点哪集跳哪集
+# 集数列表
 def episodes_keyboard(work_data, from_page=1):
     eps = work_data["episodes"]
     
-    # 智能排序：数字优先
+    # 按数字排序
+    import re
     def ep_sort_key(e):
-        import re
         nums = re.findall(r"\d+", e["episode"])
         return int(nums[0]) if nums else 99999
     
@@ -118,7 +118,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def list_all_works(update: Update, context: ContextTypes.DEFAULT_TYPE):
     works = get_all_works()
     if not works:
-        await send_menu_kb(update, "📭 暂无收录，频道发消息开始收录吧！")
+        await send_menu_kb(update, "📭 暂无收录，频道发消息开始收录吧！\n格式：《片名》第X集 #标签")
         return
 
     text = f"📋 <b>全部收录（共 {len(works)} 部作品）</b>\n点作品展开集数👇"
@@ -153,29 +153,35 @@ async def tags_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = """📖 <b>使用帮助</b>
+    text = f"""📖 <b>使用帮助</b>
 
 <b>收录格式：</b>
 《作品名》第X集 #标签1 #标签2
+示例：《伟大的长征》第一集 #历史
 
-<b>浏览方式：</b>
+<b>使用方式：</b>
 • 点作品 → 展开全部集数
-• 点对应集数 → 直接跳转播放
+• 点集数 → 直接跳转播放
 • 手机/电脑端都正常打开
 
 <b>频道链接：</b>
-{link}""".format(link=Config.CHANNEL_LINK)
+{Config.CHANNEL_LINK}"""
     await send_menu_kb(update, text)
 
 
-# 频道监听收录
+# ✅ 频道监听 — 修正匹配逻辑
 async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.channel_post
-    if not msg or str(msg.chat.id) != Config.CHANNEL_ID_EXPECTED:
+    if not msg:
+        return
+    
+    # 兼容两种格式：整数/字符串
+    if str(msg.chat.id) != str(Config.CHANNEL_ID_EXPECTED):
         return
 
     parsed = parse_message_text(msg.text or msg.caption or "")
     if not parsed:
+        print(f"ℹ️ 消息格式不匹配，跳过：{msg.text or msg.caption}")
         return
 
     work_name = parsed["work_name"]
@@ -220,7 +226,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # 展开集数列表
     if data.startswith("show_eps:"):
         work_name = data.split(":", 1)[1]
         work = get_episodes_of_work(work_name)
@@ -236,7 +241,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 翻页 — 作品列表
     if data.startswith("list_page:"):
         page = int(data.split(":")[1])
         works = get_all_works()
@@ -248,7 +252,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 返回作品列表
     if data.startswith("back_to_list:"):
         page = int(data.split(":")[1])
         works = get_all_works()
