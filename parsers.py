@@ -2,29 +2,34 @@ import re
 
 
 def parse_message_text(text: str) -> dict:
-    """解析频道消息：片名、集数、标签"""
+    """解析：片名、季/集、标签"""
     if not text:
         return None
 
-    # 匹配《片名》
+    # 主片名
     title_match = re.search(r"《([^》]+)》", text)
     if not title_match:
         return None
 
-    title = title_match.group(1).strip()
+    full_title = title_match.group(1).strip()
 
-    # 提取集数：第X集 / 第XX集 / 第X季 第X集
-    episode = ""
-    ep_match = re.search(r"(第[零一二三四五六七八九十\d]+(?:集|季))", text)
+    # 拆分作品名与集数
+    # 匹配：第X季、第X集、第XX期、上/下部
+    ep_pattern = r"\s+(第[零一二三四五六七八九十百\d]+(?:集|季|期)|[上下]部)\s*$"
+    ep_match = re.search(ep_pattern, full_title)
+    
     if ep_match:
+        work_name = re.sub(ep_pattern, "", full_title).strip()
         episode = ep_match.group(1)
-        title = f"{title} {episode}"  # 合并到片名显示
+    else:
+        work_name = full_title
+        episode = "第1集"  # 未标注默认第1集
 
-    # 提取标签：#标签
+    # 标签
     tags = re.findall(r"#(\w+)", text)
 
     return {
-        "title": title,
-        "tags": tags,
-        "episode": episode
+        "work_name": work_name,      # 作品统一名称
+        "episode": episode,          # 集/季/期
+        "tags": tags
     }
