@@ -11,7 +11,7 @@ from handlers import (
     search_cmd, direct_search, button_handler, channel_listener
 )
 
-def main():
+async def main():
     # 初始化配置与数据库
     Config.validate()
     init_db()
@@ -41,7 +41,7 @@ def main():
     print(f"🔗 频道链接: {Config.CHANNEL_LINK}")
     print("=" * 50)
     
-    app.run_polling()
+    await app.run_polling()
 
 if __name__ == "__main__":
     import asyncio
