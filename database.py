@@ -95,7 +95,7 @@ def search_shows(keyword: str) -> List[Dict]:
     ]
 
 
-def get_shows_by_tag(tag: str) -> List[Dict]:
+def get_shows_by_tags(tag: str) -> List[Dict]:
     """按标签筛选"""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
