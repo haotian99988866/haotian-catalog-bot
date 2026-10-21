@@ -1,8 +1,51 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes.DEFAULT_TYPE
 from database import get_episodes_of_work, get_all_works
-from keyboards import episodes_kb, works_list_kb, main_kb
 
+# ========== 键盘函数（直接放这里，不用单独文件） ==========
+def main_kb():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📂 全部影片", callback_data="all_movies"),
+            InlineKeyboardButton("🔍 搜索", callback_data="search")
+        ],
+        [
+            InlineKeyboardButton("🏷️ 按标签", callback_data="by_tag"),
+            InlineKeyboardButton("❓ 帮助", callback_data="help")
+        ]
+    ])
+
+def episodes_kb(work):
+    # 生成集数列表键盘，按需修改即可
+    total = work.get("total_episodes", 0)
+    uploaded = work.get("uploaded_list", [])
+    buttons = []
+    row = []
+    for ep in range(1, total + 1):
+        text = f"{ep}" if ep in uploaded else f"{ep} ░"
+        cb_data = f"play:{work['name']}:{ep}" if ep in uploaded else "noop"
+        row.append(InlineKeyboardButton(text, callback_data=cb_data))
+        if len(row) >= 5:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+    buttons.append([InlineKeyboardButton("◀ 返回", callback_data=f"list_page:1")])
+    return InlineKeyboardMarkup(buttons)
+
+def works_list_kb(works, page=1):
+    # 作品列表分页键盘，按需修改即可
+    buttons = []
+    for w in works:
+        buttons.append([InlineKeyboardButton(
+            w.get("name", "未知"),
+            callback_data=f"show_eps:{w.get('name', '')}"
+        )])
+    if not buttons:
+        buttons.append([InlineKeyboardButton("暂无数据", callback_data="noop")])
+    return InlineKeyboardMarkup(buttons)
+
+# ========== 按钮主处理函数 ==========
 async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
     q = u.callback_query
     try:
