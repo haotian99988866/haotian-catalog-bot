@@ -1,4 +1,3 @@
-import asyncio
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     CallbackQueryHandler, filters
@@ -12,7 +11,7 @@ from handlers import (
 )
 
 
-async def main():
+def main():
     Config.validate()
     init_db()
     
@@ -34,8 +33,9 @@ async def main():
     print(f"🔗 频道链接: {Config.CHANNEL_LINK}")
     print("=" * 50)
     
-    await app.run_polling()
+    # ⚠️ 关键：直接调用，不用 async/await
+    app.run_polling()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
