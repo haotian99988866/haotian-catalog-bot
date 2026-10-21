@@ -56,7 +56,7 @@ def works_list_kb(works, page=1):
 # ========== 底部主键盘 ==========
 main_reply_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton("🎬 全部影片"), KeyboardButton("🔎 搜索")],
+        [KeyboardButton("🎬 全部影片"), KeyboardButton("🔍 搜索")],
         [KeyboardButton("🏷️ 按标签"), KeyboardButton("❓ 帮助")]
     ],
     resize_keyboard=True,
@@ -96,8 +96,8 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     t = update.message.text.strip()
     
-    # 优先处理底部按钮指令，不要当成搜索关键词
-    if t == "🎬 全部影片" or t == "全部影片":
+    # 只保留纯文字匹配，忽略前面的图标，彻底解决不识别问题
+    if "全部影片" in t:
         works = get_all_works()
         if not works:
             await update.message.reply_text("暂无收录，频道发消息开始收录吧！\n格式：《片名》第X集 #标签")
@@ -108,13 +108,13 @@ async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
         return
-    elif t == "🔎 搜索" or t == "搜索":
+    elif "搜索" in t:
         await update.message.reply_text("请直接发片名关键词给我！")
         return
-    elif t == "🏷️ 按标签" or t == "按标签":
+    elif "按标签" in t:
         await update.message.reply_text("标签功能开发中，敬请期待！")
         return
-    elif t == "❓ 帮助" or t == "帮助":
+    elif "帮助" in t or "？" in t:
         text = """📖 <b>使用帮助</b>
 
 <b>收录格式：</b>
@@ -122,7 +122,7 @@ async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
 支持写法：《片名》第4集 / 《片名》第四集 / 《片名》第四集04
 
 <b>播放：</b>
-点击蓝色数字集数即可播放
+点击数字集数即可播放
 """
         await update.message.reply_text(text, parse_mode="HTML")
         return
@@ -150,7 +150,6 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info(f"📥 收到频道消息: {text}")
 
-    # 匹配：《片名》第[汉字/数字][集/期][数字后缀]
     match = re.search(r"《\s*(.+?)\s*》\s*第\s*([一二三四五六七八九十\d]+)\s*(?:集|期)\s*(\d+)?", text)
     
     if not match:
@@ -161,7 +160,6 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     num_part = match.group(2).strip()
     suffix_num = match.group(3)
 
-    # 优先用后缀数字，否则转换汉字数字
     if suffix_num:
         episode = int(suffix_num)
     else:
@@ -170,7 +168,6 @@ async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"⚠️  集数解析失败: {num_part}")
             return
 
-    # 更新数据库 — 确保已上传列表正确追加并去重
     existing = get_episodes_of_work(name)
     if existing:
         uploaded = existing["uploaded_list"] + [episode]
