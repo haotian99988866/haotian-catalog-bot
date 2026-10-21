@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from telegram.ext import (
     ApplicationBuilder,
@@ -14,7 +15,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-def main():
+async def main():
     Config.validate()
     app = ApplicationBuilder().token(Config.BOT_TOKEN).build()
 
@@ -25,7 +26,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
 
     print("✅ 机器人启动成功！")
-    app.run_polling()
+    await app.run_polling()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
