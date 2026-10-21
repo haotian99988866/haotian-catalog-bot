@@ -19,7 +19,6 @@ async def main():
     Config.validate()
     application = ApplicationBuilder().token(Config.BOT_TOKEN).build()
 
-    # 注册顺序固定
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("menu", menu))
     application.add_handler(CallbackQueryHandler(button_handler))
