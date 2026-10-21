@@ -112,8 +112,32 @@ async def direct_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def channel_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 频道消息监听 — 填入你的原有逻辑
-    pass
+    """监听频道消息，解析收录内容"""
+    text = update.channel_post.text if update.channel_post else ""
+    if not text:
+        return
+
+    # 简易解析：《片名》第X集
+    import re
+    match = re.search(r"《(.+?)》\s*第(\d+)集", text)
+    if not match:
+        match = re.search(r"《(.+?)》\s*第(\d+)期", text)
+    
+    if match:
+        name = match.group(1).strip()
+        episode = int(match.group(2))
+        # 获取现有作品或新建
+        existing = get_episodes_of_work(name)
+        if existing:
+            uploaded = existing["uploaded_list"] + [episode]
+            total = max(existing["total_episodes"], episode)
+        else:
+            uploaded = [episode]
+            total = episode  # 默认当前为最新集
+        
+        from database import add_or_update_work
+        add_or_update_work(name, total, sorted(set(uploaded)))
+        await update.message.reply_text(f"✅ 已收录：《{name}》第{episode}集")
 
 # ========== 按钮回调处理 ==========
 async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
@@ -162,7 +186,7 @@ async def button_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
     elif d == "all_movies":
         works = get_all_works()
         if not works:
-            text = "📂 <b>全部影片</b>\n暂无收录，频道发消息开始收录吧！"
+            text = "📂 <b>全部影片</b>\n暂无收录，频道发消息开始收录吧！\n格式：《片名》第X集 #标签"
         else:
             text = f"📂 <b>全部影片</b>\n共 {len(works)} 部作品"
         await q.edit_message_text(
