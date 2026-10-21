@@ -1,4 +1,4 @@
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from database import (
     get_all_shows,
@@ -11,7 +11,7 @@ from parsers import parse_message_text
 from config import Config
 
 
-# ===== 固定在输入框上方的底部键盘 =====
+# ========== 底部固定键盘 ==========
 main_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [
@@ -23,14 +23,13 @@ main_keyboard = ReplyKeyboardMarkup(
             KeyboardButton("ℹ️ 帮助")
         ]
     ],
-    resize_keyboard=True,      # 紧凑显示，不占太大空间
-    persistent=True,           # 一直固定，不会消失
-    one_time_keyboard=False,   # 点击后仍保持显示
-    input_field_placeholder="直接发片名搜索，或点下方按钮"
+    resize_keyboard=True,
+    persistent=True,
+    one_time_keyboard=False
 )
 
 
-# 内联菜单（消息里的按钮，不影响底部固定键盘）
+# 内联菜单（消息里的按钮）
 def main_inline_keyboard():
     return InlineKeyboardMarkup([
         [
@@ -44,7 +43,7 @@ def main_inline_keyboard():
     ])
 
 
-# 影片列表内联按钮
+# 影片列表按钮
 def shows_keyboard(shows, page=1, per_page=10):
     total = len(shows)
     total_pages = (total + per_page - 1) // per_page
@@ -73,11 +72,11 @@ def shows_keyboard(shows, page=1, per_page=10):
     return InlineKeyboardMarkup(keyboard) if keyboard else None
 
 
-# 主菜单 —— 首次触发显示底部固定键盘
+# 主菜单 —— 发送底部键盘
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """🎬 <b>昊天影院目录</b>
 
-欢迎使用！下方按钮已固定在输入框上方，随时可点👇
+欢迎使用！下方按钮已固定在输入框上方👇
 
 • 📺 全部影片 — 查看所有收录内容
 • 🔍 搜索 — 按片名查找
@@ -87,7 +86,7 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 也可以直接发片名搜索哦！"""
     await update.message.reply_text(
         text,
-        reply_markup=main_keyboard,  # 这里把键盘钉在输入框上方！
+        reply_markup=main_keyboard,  # ← 关键：这里把键盘钉在底部！
         parse_mode="HTML"
     )
 
@@ -104,7 +103,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>使用方式：</b>
 • 直接发片名关键词搜索
-• 点底部固定按钮快速访问
+• 点底部按钮快速访问
 
 <b>频道链接：</b>
 {link}""".format(link=Config.CHANNEL_LINK)
@@ -127,9 +126,7 @@ async def list_shows(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def search_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🔍 请直接发片名关键词给我，我帮你找！"
-    )
+    await update.message.reply_text("🔍 请直接发片名关键词给我，我帮你找！")
 
 
 async def tags_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -206,14 +203,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "main_menu":
         text = """🎬 <b>昊天影院目录</b>
 
-欢迎使用！下方按钮已固定在输入框上方，随时可点👇
-
-• 📺 全部影片 — 查看所有收录内容
-• 🔍 搜索 — 按片名查找
-• 🏷️ 按标签 — 按分类筛选
-• ℹ️ 帮助 — 查看说明
-
-也可以直接发片名搜索哦！"""
+请选择功能："""
         await query.edit_message_text(
             text,
             reply_markup=main_inline_keyboard(),
@@ -283,14 +273,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = """📖 <b>使用帮助</b>
 
 <b>收录格式：</b>
-《影片名》日期 #标签1 #标签2
-
-<b>使用方式：</b>
-• 直接发片名关键词搜索
-• 点底部固定按钮快速访问
-
-<b>频道链接：</b>
-{link}""".format(link=Config.CHANNEL_LINK)
+《影片名》日期 #标签1 #标签2"""
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton("🏠 返回主菜单", callback_data="main_menu")
         ]])
