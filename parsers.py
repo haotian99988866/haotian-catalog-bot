@@ -1,38 +1,30 @@
 import re
-from typing import Dict, Optional
 
-def parse_message_text(text: Optional[str]) -> Dict[str, Optional[str]]:
-    """解析频道消息文本，提取剧名、季、集数"""
-    result = {
-        "show_name": None,
-        "season": None,
-        "episode": None,
-        "title": None
-    }
+
+def parse_message_text(text: str) -> dict:
+    """解析频道消息：片名、集数、标签"""
     if not text:
-        return result
-    
-    # 提取《》中的剧名
+        return None
+
+    # 匹配《片名》
     title_match = re.search(r"《([^》]+)》", text)
-    if title_match:
-        result["show_name"] = title_match.group(1).strip()
-        result["title"] = result["show_name"]
-    
-    # 匹配季数
-    season_match = re.search(r"(第[一二三四五六七八九十\d]+季|Season\s*\d+)", text, re.I)
-    if season_match:
-        result["season"] = season_match.group(1)
-    
-    # 匹配集数
-    ep_match = re.search(r"第(\d+)集|(\d+)(?=\s|$)", text)
-    if ep_match:
-        result["episode"] = ep_match.group(1) or ep_match.group(2)
-    
-    return result
+    if not title_match:
+        return None
 
-def extract_tags(text: Optional[str]) -> str:
-    """提取 #标签"""
-    if not text:
-        return ""
+    title = title_match.group(1).strip()
+
+    # 提取集数：第X集 / 第XX集 / 第X季 第X集
+    episode = ""
+    ep_match = re.search(r"(第[零一二三四五六七八九十\d]+(?:集|季))", text)
+    if ep_match:
+        episode = ep_match.group(1)
+        title = f"{title} {episode}"  # 合并到片名显示
+
+    # 提取标签：#标签
     tags = re.findall(r"#(\w+)", text)
-    return " ".join(tags)
+
+    return {
+        "title": title,
+        "tags": tags,
+        "episode": episode
+    }
